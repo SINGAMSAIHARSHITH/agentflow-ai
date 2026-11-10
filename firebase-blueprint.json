@@ -1,0 +1,276 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile in H1-multilevel",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "role": { "type": "string", "enum": ["member", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User workspace preferences in H1-multilevel",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "theme": { "type": "string", "enum": ["peach_light", "warm_ivory"] },
+        "reducedMotion": { "type": "boolean" },
+        "maxParallelAgents": { "type": "integer" },
+        "maxRetries": { "type": "integer" },
+        "defaultViewMode": { "type": "string", "enum": ["chat", "compact"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "theme", "reducedMotion", "maxParallelAgents", "maxRetries", "defaultViewMode", "updatedAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "User-scoped multi-agent conversation thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "projectId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "pinned": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "title", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual user or multi-agent message within a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "conversationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "minLength": 1, "maxLength": 30000 },
+        "agentId": { "type": "string", "enum": ["orchestrator", "research", "strategy", "execution", "decision", "verification", "monitoring"] },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "decisionId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deliverableIds": { "type": "array", "description": "Up to 10 deliverable IDs" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "conversationId", "role", "content", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Workspace project grouping workflows and conversations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["active", "completed", "archived"] },
+        "progress": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "description", "status", "progress", "createdAt", "updatedAt"]
+    },
+    "Workflow": {
+      "title": "Workflow",
+      "description": "Coordinated multi-agent goal workflow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "conversationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 4000 },
+        "desiredOutcome": { "type": "string", "maxLength": 2000 },
+        "deadline": { "type": "string", "maxLength": 64 },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "budget": { "type": "string", "maxLength": 120 },
+        "constraints": { "type": "string", "maxLength": 2000 },
+        "resources": { "type": "string", "maxLength": 2000 },
+        "successCriteria": { "type": "string", "maxLength": 2000 },
+        "expectedDeliverables": { "type": "string", "maxLength": 2000 },
+        "approvalRequirements": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["draft", "awaiting_approval", "running", "paused", "completed", "failed", "cancelled"] },
+        "progress": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "projectId", "title", "description", "desiredOutcome", "deadline", "timezone", "priority", "status", "progress", "createdAt", "updatedAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Individual orchestrated task assigned to a specialized agent",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "assignedAgent": { "type": "string", "enum": ["orchestrator", "research", "strategy", "execution", "decision", "verification", "monitoring"] },
+        "status": { "type": "string", "enum": ["Idle", "Queued", "Running", "Waiting for Approval", "Completed", "Failed", "Blocked", "Cancelled"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "dependencies": { "type": "array", "description": "Up to 10 task IDs" },
+        "acceptanceCriteria": { "type": "string", "maxLength": 2000 },
+        "estimatedEffortHours": { "type": "number" },
+        "input": { "type": "string", "maxLength": 4000 },
+        "output": { "type": "string", "maxLength": 15000 },
+        "completionSource": { "type": "string", "enum": ["none", "verified_ai", "user_manual"] },
+        "attempts": { "type": "integer" },
+        "error": { "type": "string", "maxLength": 2000 },
+        "approvalRequired": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "workflowId", "title", "description", "assignedAgent", "status", "priority", "dependencies", "acceptanceCriteria", "estimatedEffortHours", "completionSource", "attempts", "approvalRequired", "createdAt", "updatedAt"]
+    },
+    "AgentRun": {
+      "title": "AgentRun",
+      "description": "Execution history record for a specialized agent",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "taskId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "agentId": { "type": "string", "enum": ["orchestrator", "research", "strategy", "execution", "decision", "verification", "monitoring"] },
+        "status": { "type": "string", "enum": ["Running", "Completed", "Failed"] },
+        "inputSummary": { "type": "string", "maxLength": 2000 },
+        "outputSummary": { "type": "string", "maxLength": 8000 },
+        "modelUsed": { "type": "string", "maxLength": 80 },
+        "attempt": { "type": "integer" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "workflowId", "taskId", "agentId", "status", "inputSummary", "outputSummary", "modelUsed", "attempt", "startedAt", "completedAt"]
+    },
+    "Deliverable": {
+      "title": "Deliverable",
+      "description": "Persisted generated report, plan, or output document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "taskId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "enum": ["research_report", "project_plan", "decision_report", "task_summary", "checklist", "implementation_plan", "progress_report"] },
+        "contentMarkdown": { "type": "string", "maxLength": 50000 },
+        "verificationStatus": { "type": "string", "enum": ["verified", "needs_revision", "user_accepted"] },
+        "verificationNotes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "workflowId", "taskId", "title", "category", "contentMarkdown", "verificationStatus", "verificationNotes", "createdAt", "updatedAt"]
+    },
+    "DecisionRecord": {
+      "title": "DecisionRecord",
+      "description": "Weighted multi-criteria decision analysis record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "question": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "recommendedOption": { "type": "string", "maxLength": 200 },
+        "rationale": { "type": "string", "maxLength": 8000 },
+        "reversalConditions": { "type": "string", "maxLength": 3000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "workflowId", "question", "recommendedOption", "rationale", "reversalConditions", "createdAt", "updatedAt"]
+    },
+    "ApprovalRecord": {
+      "title": "ApprovalRecord",
+      "description": "Human-in-the-loop gate approval record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actionType": { "type": "string", "enum": ["plan_approval", "task_gate", "external_action"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "workflowId", "targetId", "actionType", "status", "summary", "createdAt", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Chronological audit event in H1-multilevel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workflowId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actor": { "type": "string", "maxLength": 120 },
+        "action": { "type": "string", "maxLength": 160 },
+        "details": { "type": "string", "maxLength": 3000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "workflowId", "actor", "action", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles isolated to owner"
+    },
+    "/userSettings/{userId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "User preferences and orchestration settings"
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "User-scoped conversation threads"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "User-scoped chat messages within conversations"
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Projects owned by users"
+    },
+    "/workflows/{workflowId}": {
+      "schema": { "$ref": "#/entities/Workflow" },
+      "description": "Multi-agent workflows owned by users"
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Orchestrated tasks owned by users"
+    },
+    "/agentRuns/{runId}": {
+      "schema": { "$ref": "#/entities/AgentRun" },
+      "description": "Agent execution runs owned by users"
+    },
+    "/deliverables/{deliverableId}": {
+      "schema": { "$ref": "#/entities/Deliverable" },
+      "description": "Generated deliverables owned by users"
+    },
+    "/decisions/{decisionId}": {
+      "schema": { "$ref": "#/entities/DecisionRecord" },
+      "description": "Decision intelligence records owned by users"
+    },
+    "/approvals/{approvalId}": {
+      "schema": { "$ref": "#/entities/ApprovalRecord" },
+      "description": "Approval gate records owned by users"
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Chronological activity logs owned by users"
+    }
+  }
+}

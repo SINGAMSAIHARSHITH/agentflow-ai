@@ -1,0 +1,449 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'sh5759632@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'email', 'role', 'createdAt', 'updatedAt']) &&
+        data.uid == userId &&
+        data.uid == request.auth.uid &&
+        isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 254)) &&
+        data.role in ['member', 'admin'] &&
+        (data.role == 'member' || isAdmin()) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserSettings(data, userId) {
+      return data.keys().hasAll(['ownerId', 'theme', 'reducedMotion', 'maxParallelAgents', 'maxRetries', 'defaultViewMode', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'theme', 'reducedMotion', 'maxParallelAgents', 'maxRetries', 'defaultViewMode', 'updatedAt']) &&
+        data.ownerId == userId &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        data.theme in ['peach_light', 'warm_ivory'] &&
+        data.reducedMotion is bool &&
+        data.maxParallelAgents is int && data.maxParallelAgents >= 1 && data.maxParallelAgents <= 7 &&
+        data.maxRetries is int && data.maxRetries >= 0 && data.maxRetries <= 5 &&
+        data.defaultViewMode in ['chat', 'compact'] &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidConversation(data, conversationId) {
+      return data.keys().hasAll(['id', 'ownerId', 'title', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'title', 'projectId', 'workflowId', 'pinned', 'createdAt', 'updatedAt']) &&
+        data.id == conversationId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        (!('projectId' in data) || isValidId(data.projectId)) &&
+        (!('workflowId' in data) || isValidId(data.workflowId)) &&
+        (!('pinned' in data) || data.pinned is bool) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidChatMessage(data, messageId) {
+      return data.keys().hasAll(['id', 'ownerId', 'conversationId', 'role', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'conversationId', 'role', 'content', 'agentId', 'workflowId', 'decisionId', 'deliverableIds', 'createdAt']) &&
+        data.id == messageId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.conversationId) &&
+        data.role in ['user', 'assistant'] &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 30000 &&
+        (!('agentId' in data) || data.agentId in ['orchestrator', 'research', 'strategy', 'execution', 'decision', 'verification', 'monitoring']) &&
+        (!('workflowId' in data) || isValidId(data.workflowId)) &&
+        (!('decisionId' in data) || isValidId(data.decisionId)) &&
+        (!('deliverableIds' in data) || (data.deliverableIds is list && data.deliverableIds.size() <= 10 && (data.deliverableIds.size() == 0 || (data.deliverableIds[0] is string && data.deliverableIds[0].size() <= 128)))) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidProject(data, projectId) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'description', 'status', 'progress', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'name', 'description', 'status', 'progress', 'createdAt', 'updatedAt']) &&
+        data.id == projectId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        data.description is string && data.description.size() <= 2000 &&
+        data.status in ['active', 'completed', 'archived'] &&
+        data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWorkflow(data, workflowId) {
+      return data.keys().hasAll(['id', 'ownerId', 'projectId', 'title', 'description', 'desiredOutcome', 'deadline', 'timezone', 'priority', 'status', 'progress', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'projectId', 'conversationId', 'title', 'description', 'desiredOutcome', 'deadline', 'timezone', 'priority', 'budget', 'constraints', 'resources', 'successCriteria', 'expectedDeliverables', 'approvalRequirements', 'status', 'progress', 'createdAt', 'updatedAt']) &&
+        data.id == workflowId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.projectId) &&
+        (!('conversationId' in data) || isValidId(data.conversationId)) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.description is string && data.description.size() <= 4000 &&
+        data.desiredOutcome is string && data.desiredOutcome.size() <= 2000 &&
+        data.deadline is string && data.deadline.size() <= 64 &&
+        data.timezone is string && data.timezone.size() <= 64 &&
+        data.priority in ['low', 'medium', 'high', 'critical'] &&
+        (!('budget' in data) || (data.budget is string && data.budget.size() <= 120)) &&
+        (!('constraints' in data) || (data.constraints is string && data.constraints.size() <= 2000)) &&
+        (!('resources' in data) || (data.resources is string && data.resources.size() <= 2000)) &&
+        (!('successCriteria' in data) || (data.successCriteria is string && data.successCriteria.size() <= 2000)) &&
+        (!('expectedDeliverables' in data) || (data.expectedDeliverables is string && data.expectedDeliverables.size() <= 2000)) &&
+        (!('approvalRequirements' in data) || (data.approvalRequirements is string && data.approvalRequirements.size() <= 1000)) &&
+        data.status in ['draft', 'awaiting_approval', 'running', 'paused', 'completed', 'failed', 'cancelled'] &&
+        data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTask(data, taskId) {
+      return data.keys().hasAll(['id', 'ownerId', 'workflowId', 'title', 'description', 'assignedAgent', 'status', 'priority', 'dependencies', 'acceptanceCriteria', 'estimatedEffortHours', 'completionSource', 'attempts', 'approvalRequired', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'workflowId', 'title', 'description', 'assignedAgent', 'status', 'priority', 'dependencies', 'acceptanceCriteria', 'estimatedEffortHours', 'input', 'output', 'completionSource', 'attempts', 'error', 'approvalRequired', 'createdAt', 'updatedAt']) &&
+        data.id == taskId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.workflowId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.description is string && data.description.size() <= 3000 &&
+        data.assignedAgent in ['orchestrator', 'research', 'strategy', 'execution', 'decision', 'verification', 'monitoring'] &&
+        data.status in ['Idle', 'Queued', 'Running', 'Waiting for Approval', 'Completed', 'Failed', 'Blocked', 'Cancelled'] &&
+        data.priority in ['low', 'medium', 'high', 'critical'] &&
+        data.dependencies is list && data.dependencies.size() <= 10 &&
+        (data.dependencies.size() == 0 || (data.dependencies[0] is string && data.dependencies[0].size() <= 128)) &&
+        data.acceptanceCriteria is string && data.acceptanceCriteria.size() <= 2000 &&
+        data.estimatedEffortHours is number && data.estimatedEffortHours >= 0 && data.estimatedEffortHours <= 1000 &&
+        (!('input' in data) || (data.input is string && data.input.size() <= 4000)) &&
+        (!('output' in data) || (data.output is string && data.output.size() <= 15000)) &&
+        data.completionSource in ['none', 'verified_ai', 'user_manual'] &&
+        data.attempts is int && data.attempts >= 0 && data.attempts <= 10 &&
+        (!('error' in data) || (data.error is string && data.error.size() <= 2000)) &&
+        data.approvalRequired is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAgentRun(data, runId) {
+      return data.keys().hasAll(['id', 'ownerId', 'workflowId', 'taskId', 'agentId', 'status', 'inputSummary', 'outputSummary', 'modelUsed', 'attempt', 'startedAt', 'completedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'workflowId', 'taskId', 'agentId', 'status', 'inputSummary', 'outputSummary', 'modelUsed', 'attempt', 'startedAt', 'completedAt']) &&
+        data.id == runId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.workflowId) &&
+        isValidId(data.taskId) &&
+        data.agentId in ['orchestrator', 'research', 'strategy', 'execution', 'decision', 'verification', 'monitoring'] &&
+        data.status in ['Running', 'Completed', 'Failed'] &&
+        data.inputSummary is string && data.inputSummary.size() <= 2000 &&
+        data.outputSummary is string && data.outputSummary.size() <= 8000 &&
+        data.modelUsed is string && data.modelUsed.size() <= 80 &&
+        data.attempt is int && data.attempt >= 1 && data.attempt <= 10 &&
+        data.startedAt is timestamp &&
+        data.completedAt is timestamp;
+    }
+
+    function isValidDeliverable(data, deliverableId) {
+      return data.keys().hasAll(['id', 'ownerId', 'workflowId', 'taskId', 'title', 'category', 'contentMarkdown', 'verificationStatus', 'verificationNotes', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'workflowId', 'taskId', 'title', 'category', 'contentMarkdown', 'verificationStatus', 'verificationNotes', 'createdAt', 'updatedAt']) &&
+        data.id == deliverableId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.workflowId) &&
+        isValidId(data.taskId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.category in ['research_report', 'project_plan', 'decision_report', 'task_summary', 'checklist', 'implementation_plan', 'progress_report'] &&
+        data.contentMarkdown is string && data.contentMarkdown.size() <= 50000 &&
+        data.verificationStatus in ['verified', 'needs_revision', 'user_accepted'] &&
+        data.verificationNotes is string && data.verificationNotes.size() <= 2000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDecisionRecord(data, decisionId) {
+      return data.keys().hasAll(['id', 'ownerId', 'workflowId', 'question', 'recommendedOption', 'rationale', 'reversalConditions', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'workflowId', 'question', 'recommendedOption', 'rationale', 'reversalConditions', 'createdAt', 'updatedAt']) &&
+        data.id == decisionId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.workflowId) &&
+        data.question is string && data.question.size() >= 1 && data.question.size() <= 500 &&
+        data.recommendedOption is string && data.recommendedOption.size() <= 200 &&
+        data.rationale is string && data.rationale.size() <= 8000 &&
+        data.reversalConditions is string && data.reversalConditions.size() <= 3000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidApprovalRecord(data, approvalId) {
+      return data.keys().hasAll(['id', 'ownerId', 'workflowId', 'targetId', 'actionType', 'status', 'summary', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'workflowId', 'targetId', 'actionType', 'status', 'summary', 'createdAt', 'updatedAt']) &&
+        data.id == approvalId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.workflowId) &&
+        isValidId(data.targetId) &&
+        data.actionType in ['plan_approval', 'task_gate', 'external_action'] &&
+        data.status in ['pending', 'approved', 'rejected'] &&
+        data.summary is string && data.summary.size() <= 1000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data, logId) {
+      return data.keys().hasAll(['id', 'ownerId', 'workflowId', 'actor', 'action', 'details', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'workflowId', 'actor', 'action', 'details', 'createdAt']) &&
+        data.id == logId &&
+        isValidId(data.id) &&
+        data.ownerId == request.auth.uid &&
+        isValidId(data.ownerId) &&
+        isValidId(data.workflowId) &&
+        data.actor is string && data.actor.size() >= 1 && data.actor.size() <= 120 &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 160 &&
+        data.details is string && data.details.size() <= 3000 &&
+        data.createdAt is timestamp;
+    }
+
+    function ownsProject(projectId) {
+      return exists(/databases/$(database)/documents/projects/$(projectId)) &&
+        get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    function ownsWorkflow(workflowId) {
+      return exists(/databases/$(database)/documents/workflows/$(workflowId)) &&
+        get(/databases/$(database)/documents/workflows/$(workflowId)).data.ownerId == request.auth.uid;
+    }
+
+    function ownsConversation(conversationId) {
+      return exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+        get(/databases/$(database)/documents/conversations/$(conversationId)).data.ownerId == request.auth.uid;
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if false;
+      allow create: if isSignedIn() && isValidId(userId) && isValidUserProfile(incoming(), userId) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId) && isValidUserProfile(incoming(), userId) &&
+        existing().uid == request.auth.uid &&
+        incoming().uid == existing().uid &&
+        incoming().role == existing().role &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /userSettings/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isSignedIn() && isValidId(userId) && isValidUserSettings(incoming(), userId) && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId) && isValidUserSettings(incoming(), userId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['theme', 'reducedMotion', 'maxParallelAgents', 'maxRetries', 'defaultViewMode', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && isValidId(conversationId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(conversationId) && isValidConversation(incoming(), conversationId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(conversationId) && isValidConversation(incoming(), conversationId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'projectId', 'workflowId', 'pinned', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(conversationId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(messageId) && isValidChatMessage(incoming(), messageId) &&
+        incoming().createdAt == request.time &&
+        ownsConversation(incoming().conversationId);
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(messageId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && isValidId(projectId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming(), projectId) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(projectId) && isValidProject(incoming(), projectId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().status != 'archived' || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'status', 'progress', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(projectId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /workflows/{workflowId} {
+      allow get: if isSignedIn() && isValidId(workflowId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(workflowId) && isValidWorkflow(incoming(), workflowId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        ownsProject(incoming().projectId);
+      allow update: if isSignedIn() && isValidId(workflowId) && isValidWorkflow(incoming(), workflowId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().projectId == existing().projectId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().status != 'cancelled' || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'desiredOutcome', 'deadline', 'priority', 'status', 'progress', 'updatedAt']) &&
+        ownsProject(existing().projectId);
+      allow delete: if isSignedIn() && isValidId(workflowId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /tasks/{taskId} {
+      allow get: if isSignedIn() && isValidId(taskId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming(), taskId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        ownsWorkflow(incoming().workflowId);
+      allow update: if isSignedIn() && isValidId(taskId) && isValidTask(incoming(), taskId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().workflowId == existing().workflowId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().status != 'Cancelled' || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'assignedAgent', 'status', 'priority', 'dependencies', 'acceptanceCriteria', 'estimatedEffortHours', 'output', 'completionSource', 'attempts', 'error', 'updatedAt']) &&
+        ownsWorkflow(existing().workflowId);
+      allow delete: if isSignedIn() && isValidId(taskId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /agentRuns/{runId} {
+      allow get: if isSignedIn() && isValidId(runId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(runId) && isValidAgentRun(incoming(), runId) &&
+        incoming().startedAt == request.time &&
+        ownsWorkflow(incoming().workflowId);
+      allow update, delete: if false;
+    }
+
+    match /deliverables/{deliverableId} {
+      allow get: if isSignedIn() && isValidId(deliverableId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(deliverableId) && isValidDeliverable(incoming(), deliverableId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        ownsWorkflow(incoming().workflowId);
+      allow update: if isSignedIn() && isValidId(deliverableId) && isValidDeliverable(incoming(), deliverableId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().workflowId == existing().workflowId &&
+        incoming().taskId == existing().taskId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'contentMarkdown', 'verificationStatus', 'verificationNotes', 'updatedAt']) &&
+        ownsWorkflow(existing().workflowId);
+      allow delete: if isSignedIn() && isValidId(deliverableId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /decisions/{decisionId} {
+      allow get: if isSignedIn() && isValidId(decisionId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(decisionId) && isValidDecisionRecord(incoming(), decisionId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        ownsWorkflow(incoming().workflowId);
+      allow update: if isSignedIn() && isValidId(decisionId) && isValidDecisionRecord(incoming(), decisionId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().workflowId == existing().workflowId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['question', 'recommendedOption', 'rationale', 'reversalConditions', 'updatedAt']) &&
+        ownsWorkflow(existing().workflowId);
+      allow delete: if isSignedIn() && isValidId(decisionId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /approvals/{approvalId} {
+      allow get: if isSignedIn() && isValidId(approvalId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(approvalId) && isValidApprovalRecord(incoming(), approvalId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        ownsWorkflow(incoming().workflowId);
+      allow update: if isSignedIn() && isValidId(approvalId) && isValidApprovalRecord(incoming(), approvalId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().workflowId == existing().workflowId &&
+        incoming().targetId == existing().targetId &&
+        incoming().actionType == existing().actionType &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().status == 'pending' || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'summary', 'updatedAt']) &&
+        ownsWorkflow(existing().workflowId);
+      allow delete: if false;
+    }
+
+    match /activityLogs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(logId) && isValidActivityLog(incoming(), logId) &&
+        incoming().createdAt == request.time &&
+        ownsWorkflow(incoming().workflowId);
+      allow update, delete: if false;
+    }
+  }
+}

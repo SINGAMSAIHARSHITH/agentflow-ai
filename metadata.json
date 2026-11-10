@@ -1,0 +1,6 @@
+{
+  "name": "H1-multilevel",
+  "description": "An intelligent platform that coordinates specialised AI agents to plan, execute, verify, and optimise complex tasks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
