@@ -38,7 +38,8 @@ import { InlineDeliverableCard } from './components/InlineDeliverableCard';
 import { AgentActivityPanel } from './components/AgentActivityPanel';
 import { Sidebar, SettingsModal } from './components/SidebarAndModals';
 import {
-  auth,
+  isFirebaseConfigured,
+  subscribeToAuth,
   signInWithGoogle,
   signOutUser,
   syncConversationToFirestore,
@@ -50,7 +51,6 @@ import {
   syncDeliverableToFirestore,
   syncUserSettingsToFirestore,
 } from './lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 
 const SUGGESTION_ICONS: Record<string, React.ReactNode> = {
   plan: <Compass className="w-4 h-4 text-[#C78A4A]" />,
@@ -139,7 +139,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const unsub = subscribeToAuth((user) => {
       setUserEmail(user?.email || null);
     });
     return () => unsub();
@@ -413,6 +413,20 @@ export default function App() {
     }
   };
 
+  const handleSignIn = async () => {
+    if (!isFirebaseConfigured) {
+      setErrorBanner(
+        'Cloud sync is disabled because Firebase environment variables are not configured. Your conversations and workflows are automatically saved locally in this browser.'
+      );
+      return;
+    }
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      setErrorBanner(err?.message || 'Sign-in could not be completed in this environment.');
+    }
+  };
+
   const agents = snapshot?.agents || INITIAL_AGENTS;
   const activeAgentCount = agents.filter((a) => a.status === 'Running').length;
 
@@ -433,7 +447,7 @@ export default function App() {
         workflows={snapshot?.workflows || []}
         onOpenSettings={() => setSettingsModalOpen(true)}
         userEmail={userEmail}
-        onSignIn={() => signInWithGoogle()}
+        onSignIn={handleSignIn}
         onSignOut={() => signOutUser()}
       />
 

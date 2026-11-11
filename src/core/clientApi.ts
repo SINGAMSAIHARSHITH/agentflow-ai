@@ -1058,20 +1058,34 @@ This deliverable was generated for **${task.title}** in alignment with workflow 
 
 let backendAvailable: boolean | null = null;
 
+const CONFIGURED_API_BASE = (
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
+  ''
+)
+  .trim()
+  .replace(/\/+$/, '');
+
 /**
- * Helper to call backend API first when available, and seamlessly fall back to
- * client-side orchestration when hosted on static GitHub Pages (`singamsaiharshith.github.io/agentflow-ai/`).
+ * Helper to call the secure backend proxy (`/api/*` or `VITE_API_BASE_URL/api/*`) when available,
+ * and gracefully disable remote AI API calls (falling back to client-side multi-agent orchestration)
+ * when hosted on static GitHub Pages without a backend proxy configured.
+ * Private API keys are NEVER stored or used in browser code.
  */
 async function tryFetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
-  if (typeof window !== 'undefined' && window.location.hostname.endsWith('github.io')) {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.hostname.endsWith('github.io') &&
+    !CONFIGURED_API_BASE
+  ) {
     backendAvailable = false;
     return null;
   }
   if (backendAvailable === false) {
     return null;
   }
+  const targetUrl = CONFIGURED_API_BASE && url.startsWith('/') ? `${CONFIGURED_API_BASE}${url}` : url;
   try {
-    const res = await fetch(url, init);
+    const res = await fetch(targetUrl, init);
     const contentType = res.headers.get('content-type') || '';
     if (!res.ok || !contentType.includes('application/json')) {
       backendAvailable = false;

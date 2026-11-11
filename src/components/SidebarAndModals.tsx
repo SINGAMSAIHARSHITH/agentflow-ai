@@ -481,11 +481,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
 
-          <div className="p-3 rounded-xl bg-[#FAF8F6] border border-[#E8E3DF] flex items-center justify-between text-[12px]">
-            <span className="text-[#79736E]">Server-Side Gemini Orchestration</span>
-            <span className="font-medium text-[#679779]">
-              {geminiConfigured ? 'Connected' : 'Structured Fallback Ready'}
-            </span>
+          <div className="p-3.5 rounded-xl bg-[#FAF8F6] border border-[#E8E3DF] space-y-1.5 text-[12px]">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-[#302C29]">AI Backend Proxy Status</span>
+              <span className="font-semibold text-[#679779]">
+                {geminiConfigured ? 'Secure Proxy Connected' : 'Local Multi-Agent Engine Active'}
+              </span>
+            </div>
+            {!geminiConfigured && (
+              <p className="text-[11.5px] text-[#79736E] leading-relaxed">
+                Live cloud LLM API calls are gracefully disabled because no backend proxy is
+                configured. Static GitHub Pages deployments never embed private API keys in browser
+                code; all 7 specialised agents are running via the built-in deterministic
+                orchestration engine.
+              </p>
+            )}
           </div>
 
           <div className="pt-2 border-t border-[#E8E3DF]">

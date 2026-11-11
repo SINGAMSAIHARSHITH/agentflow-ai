@@ -1,8 +1,25 @@
+# Dependencies & build outputs
 node_modules/
 build/
 dist/
 coverage/
+
+# Environment variables & secrets (NEVER commit real keys)
+.env
+.env.*
+!.env.example
+
+# Sensitive Firebase & Google Cloud configuration files
+firebase-applet-config.json
+firebase-applet-config.js
+firebase-config.js
+firebase-config.json
+service-account*.json
+*.pem
+*.key
+
+# Local runtime state & logs
+.data/
+.playwright-cli/
 .DS_Store
 *.log
-.env*
-!.env.example

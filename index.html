@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-vite-base="%BASE_URL%">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,7 +15,7 @@
     />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link id="h1-favicon" rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,7 +23,7 @@
       rel="stylesheet"
     />
     <script type="text/javascript">
-      // Restore clean URL path when redirected from public/404.html on GitHub Pages
+      // 1. Restore clean URL path when redirected from 404.html on GitHub Pages
       (function (l) {
         if (l.search[1] === '/') {
           var decoded = l.search
@@ -40,10 +40,46 @@
           );
         }
       })(window.location);
+
+      // 2. Fallback loader when GitHub Pages serves raw repository branch instead of dist/
+      (function () {
+        var rawBaseAttr = document.documentElement.getAttribute('data-vite-base') || '';
+        var isUnbuiltBranch = rawBaseAttr.indexOf('%BASE_' + 'URL%') !== -1;
+        var basePrefix =
+          window.location.pathname.indexOf('/agentflow-ai') === 0 ? '/agentflow-ai' : '';
+
+        window.__loadH1FallbackBundle = function () {
+          if (window.__h1FallbackLoaded) return;
+          window.__h1FallbackLoaded = true;
+
+          var fav = document.getElementById('h1-favicon');
+          if (fav) {
+            fav.setAttribute('href', basePrefix + '/public/favicon.svg');
+          }
+
+          var css = document.createElement('link');
+          css.rel = 'stylesheet';
+          css.href = basePrefix + '/public/gh-pages-bundle/app.css';
+          document.head.appendChild(css);
+
+          var script = document.createElement('script');
+          script.type = 'module';
+          script.src = basePrefix + '/public/gh-pages-bundle/app.js';
+          document.head.appendChild(script);
+        };
+
+        if (isUnbuiltBranch) {
+          window.__loadH1FallbackBundle();
+        }
+      })();
     </script>
   </head>
   <body class="bg-[#FAF8F6] text-[#302C29] antialiased selection:bg-[#FFD6C2] selection:text-[#302C29]">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script
+      type="module"
+      src="/src/main.tsx"
+      onerror="window.__loadH1FallbackBundle && window.__loadH1FallbackBundle()"
+    ></script>
   </body>
 </html>

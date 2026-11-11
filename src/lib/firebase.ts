@@ -1,10 +1,11 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signOut as fbSignOut,
   onAuthStateChanged,
+  Auth,
   User,
 } from 'firebase/auth';
 import {
@@ -14,8 +15,8 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
+  Firestore,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
 import {
   ChatMessage,
   Conversation,
@@ -26,9 +27,62 @@ import {
   Workflow,
 } from '../types/h1';
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+const env = import.meta.env || {};
+
+const firebaseConfig = {
+  apiKey: (env.VITE_FIREBASE_API_KEY || '').trim(),
+  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN || '').trim(),
+  projectId: (env.VITE_FIREBASE_PROJECT_ID || '').trim(),
+  storageBucket: (env.VITE_FIREBASE_STORAGE_BUCKET || '').trim(),
+  messagingSenderId: (env.VITE_FIREBASE_MESSAGING_SENDER_ID || '').trim(),
+  appId: (env.VITE_FIREBASE_APP_ID || '').trim(),
+  firestoreDatabaseId: (env.VITE_FIREBASE_DATABASE_ID || '').trim(),
+};
+
+function hasValidFirebaseEnv(): boolean {
+  const { apiKey, projectId } = firebaseConfig;
+  if (!apiKey || !projectId) return false;
+  if (apiKey.includes('YOUR_') || projectId.includes('YOUR_')) return false;
+  return true;
+}
+
+export const isFirebaseConfigured = hasValidFirebaseEnv();
+
+let app: FirebaseApp | null = null;
+let dbInstance: Firestore | null = null;
+let authInstance: Auth | null = null;
+
+try {
+  if (isFirebaseConfigured) {
+    app = initializeApp(firebaseConfig);
+    dbInstance = firebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      : getFirestore(app);
+    authInstance = getAuth(app);
+  }
+} catch (err) {
+  console.warn('[H1-multilevel] Firebase optional cloud sync unavailable in this environment:', err);
+}
+
+export const db = dbInstance as Firestore;
+export const auth = authInstance as Auth;
+
+export function subscribeToAuth(callback: (user: User | null) => void): () => void {
+  if (!authInstance) {
+    callback(null);
+    return () => {};
+  }
+  try {
+    return onAuthStateChanged(
+      authInstance,
+      (user) => callback(user),
+      () => callback(null)
+    );
+  } catch {
+    callback(null);
+    return () => {};
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -99,13 +153,14 @@ export async function testFirestoreConnection(): Promise<boolean> {
 }
 
 export async function signInWithGoogle(): Promise<User | null> {
+  if (!authInstance || !dbInstance) return null;
   const provider = new GoogleAuthProvider();
-  const cred = await signInWithPopup(auth, provider);
+  const cred = await signInWithPopup(authInstance, provider);
   if (cred.user) {
     const userPath = `users/${cred.user.uid}`;
     try {
       await setDoc(
-        doc(db, 'users', cred.user.uid),
+        doc(dbInstance, 'users', cred.user.uid),
         {
           uid: cred.user.uid,
           displayName: (cred.user.displayName || 'H1 Operator').slice(0, 120),
@@ -126,16 +181,18 @@ export async function signInWithGoogle(): Promise<User | null> {
 }
 
 export async function signOutUser(): Promise<void> {
-  await fbSignOut(auth);
+  if (!authInstance) return;
+  await fbSignOut(authInstance);
 }
 
 export async function syncConversationToFirestore(conv: Conversation): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `conversations/${conv.id}`;
   try {
     const payload: Record<string, unknown> = {
       id: conv.id.slice(0, 128),
-      ownerId: auth.currentUser.uid,
+      ownerId: currentUser.uid,
       title: (conv.title || 'New Conversation').slice(0, 200),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -143,7 +200,7 @@ export async function syncConversationToFirestore(conv: Conversation): Promise<v
     if (conv.projectId) payload.projectId = conv.projectId.slice(0, 128);
     if (conv.workflowId) payload.workflowId = conv.workflowId.slice(0, 128);
     if (typeof conv.pinned === 'boolean') payload.pinned = conv.pinned;
-    await setDoc(doc(db, 'conversations', conv.id), payload, { merge: true });
+    await setDoc(doc(dbInstance, 'conversations', conv.id), payload, { merge: true });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Missing or insufficient permissions')) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -152,12 +209,13 @@ export async function syncConversationToFirestore(conv: Conversation): Promise<v
 }
 
 export async function syncMessageToFirestore(msg: ChatMessage): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `messages/${msg.id}`;
   try {
     const payload: Record<string, unknown> = {
       id: msg.id.slice(0, 128),
-      ownerId: auth.currentUser.uid,
+      ownerId: currentUser.uid,
       conversationId: msg.conversationId.slice(0, 128),
       role: msg.role,
       content: (msg.content || ' ').slice(0, 30000),
@@ -169,7 +227,7 @@ export async function syncMessageToFirestore(msg: ChatMessage): Promise<void> {
     if (Array.isArray(msg.deliverableIds)) {
       payload.deliverableIds = msg.deliverableIds.slice(0, 10).map((d) => d.slice(0, 128));
     }
-    await setDoc(doc(db, 'messages', msg.id), payload);
+    await setDoc(doc(dbInstance, 'messages', msg.id), payload);
   } catch (error) {
     if (error instanceof Error && error.message.includes('Missing or insufficient permissions')) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -178,10 +236,11 @@ export async function syncMessageToFirestore(msg: ChatMessage): Promise<void> {
 }
 
 export async function deleteConversationFromFirestore(conversationId: string): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `conversations/${conversationId}`;
   try {
-    await deleteDoc(doc(db, 'conversations', conversationId));
+    await deleteDoc(doc(dbInstance, 'conversations', conversationId));
   } catch (error) {
     if (error instanceof Error && error.message.includes('Missing or insufficient permissions')) {
       handleFirestoreError(error, OperationType.DELETE, path);
@@ -190,14 +249,15 @@ export async function deleteConversationFromFirestore(conversationId: string): P
 }
 
 export async function syncWorkflowToFirestore(wf: Workflow): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `workflows/${wf.id}`;
   try {
     await setDoc(
-      doc(db, 'workflows', wf.id),
+      doc(dbInstance, 'workflows', wf.id),
       {
         id: wf.id.slice(0, 128),
-        ownerId: auth.currentUser.uid,
+        ownerId: currentUser.uid,
         projectId: wf.projectId.slice(0, 128),
         title: wf.title.slice(0, 200),
         description: wf.description.slice(0, 3000),
@@ -220,14 +280,15 @@ export async function syncWorkflowToFirestore(wf: Workflow): Promise<void> {
 }
 
 export async function syncTaskToFirestore(task: Task): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `tasks/${task.id}`;
   try {
     await setDoc(
-      doc(db, 'tasks', task.id),
+      doc(dbInstance, 'tasks', task.id),
       {
         id: task.id.slice(0, 128),
-        ownerId: auth.currentUser.uid,
+        ownerId: currentUser.uid,
         workflowId: task.workflowId.slice(0, 128),
         title: task.title.slice(0, 200),
         description: task.description.slice(0, 3000),
@@ -256,14 +317,15 @@ export async function syncTaskToFirestore(task: Task): Promise<void> {
 }
 
 export async function syncDeliverableToFirestore(del: Deliverable): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `deliverables/${del.id}`;
   try {
     await setDoc(
-      doc(db, 'deliverables', del.id),
+      doc(dbInstance, 'deliverables', del.id),
       {
         id: del.id.slice(0, 128),
-        ownerId: auth.currentUser.uid,
+        ownerId: currentUser.uid,
         workflowId: del.workflowId.slice(0, 128),
         taskId: del.taskId.slice(0, 128),
         title: del.title.slice(0, 200),
@@ -284,14 +346,15 @@ export async function syncDeliverableToFirestore(del: Deliverable): Promise<void
 }
 
 export async function syncDecisionToFirestore(dec: DecisionRecord): Promise<void> {
-  if (!auth.currentUser) return;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
   const path = `decisions/${dec.id}`;
   try {
     await setDoc(
-      doc(db, 'decisions', dec.id),
+      doc(dbInstance, 'decisions', dec.id),
       {
         id: dec.id.slice(0, 128),
-        ownerId: auth.currentUser.uid,
+        ownerId: currentUser.uid,
         workflowId: dec.workflowId.slice(0, 128),
         question: dec.question.slice(0, 500),
         context: dec.context.slice(0, 2000),
@@ -320,13 +383,14 @@ export async function syncDecisionToFirestore(dec: DecisionRecord): Promise<void
 }
 
 export async function syncUserSettingsToFirestore(settings: UserSettings): Promise<void> {
-  if (!auth.currentUser) return;
-  const path = `userSettings/${auth.currentUser.uid}`;
+  const currentUser = authInstance?.currentUser;
+  if (!currentUser || !dbInstance) return;
+  const path = `userSettings/${currentUser.uid}`;
   try {
     await setDoc(
-      doc(db, 'userSettings', auth.currentUser.uid),
+      doc(dbInstance, 'userSettings', currentUser.uid),
       {
-        ownerId: auth.currentUser.uid,
+        ownerId: currentUser.uid,
         theme: settings.theme,
         reducedMotion: Boolean(settings.reducedMotion),
         maxParallelAgents: Math.min(7, Math.max(1, settings.maxParallelAgents)),

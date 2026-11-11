@@ -298,11 +298,38 @@ test('Forbidden-colour and secret audit: peach light palette, zero blue/dark tok
   assert.ok(viteConfig.includes("base: '/agentflow-ai/'"));
 
   assert.ok(fs.existsSync(path.join(rootDir, 'public', '404.html')));
-  assert.ok(fs.existsSync(path.join(rootDir, '.github', 'workflows', 'deploy.yml')));
+  assert.ok(fs.existsSync(path.join(rootDir, '404.html')));
+  assert.ok(fs.existsSync(path.join(rootDir, '.nojekyll')));
+  assert.ok(fs.existsSync(path.join(rootDir, 'public', 'gh-pages-bundle', 'app.js')));
+  assert.ok(fs.existsSync(path.join(rootDir, 'public', 'gh-pages-bundle', 'app.css')));
+  assert.ok(fs.existsSync(path.join(rootDir, 'src', 'components', 'ErrorBoundary.tsx')));
+
+  const deployWorkflowPath = path.join(rootDir, '.github', 'workflows', 'deploy.yml');
+  assert.ok(fs.existsSync(deployWorkflowPath));
+  const deployWorkflowContent = fs.readFileSync(deployWorkflowPath, 'utf8');
+  assert.ok(
+    !deployWorkflowContent.includes("cache: 'npm'") && !deployWorkflowContent.includes('cache: "npm"'),
+    'deploy.yml must not set cache: npm on setup-node when package-lock.json is not committed'
+  );
 
   const forbiddenClassRegex =
     /\b(bg|text|border|ring|from|via|to|fill|stroke|shadow)-(blue|sky|cyan|teal|indigo|slate)-\d{2,3}\b/i;
   const forbiddenDarkHexRegex = /#(11100F|000000)\b/i;
+  const googleApiKeyRegex = /AIza[0-9A-Za-z_-]{25,}/;
+
+  const gitignoreContent = fs.readFileSync(path.join(rootDir, '.gitignore'), 'utf8');
+  assert.ok(gitignoreContent.includes('.env'));
+  assert.ok(gitignoreContent.includes('firebase-applet-config.json'));
+  assert.ok(gitignoreContent.includes('firebase-applet-config.js'));
+
+  const fbConfigPath = path.join(rootDir, 'firebase-applet-config.json');
+  if (fs.existsSync(fbConfigPath)) {
+    const fbConfigContent = fs.readFileSync(fbConfigPath, 'utf8');
+    assert.ok(
+      !googleApiKeyRegex.test(fbConfigContent),
+      'firebase-applet-config.json must not contain an exposed Google API key'
+    );
+  }
 
   function scanDir(dirPath: string): string[] {
     if (!fs.existsSync(dirPath)) return [];
@@ -313,24 +340,32 @@ test('Forbidden-colour and secret audit: peach light palette, zero blue/dark tok
         if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('.'))
           continue;
         violations.push(...scanDir(fullPath));
-      } else if (/\.(ts|tsx|css|html)$/.test(entry.name) && !entry.name.endsWith('.test.ts')) {
+      } else if (/\.(ts|tsx|js|json|css|html)$/.test(entry.name) && !entry.name.endsWith('.test.ts')) {
         const content = fs.readFileSync(fullPath, 'utf8');
-        const match = content.match(forbiddenClassRegex);
-        if (match) {
-          violations.push(`${fullPath}: found forbidden blue/cool colour class "${match[0]}"`);
-        }
-        const darkMatch = content.match(forbiddenDarkHexRegex);
-        if (darkMatch) {
-          violations.push(`${fullPath}: found forbidden dark hex "${darkMatch[0]}"`);
+        if (/\.(ts|tsx|css|html)$/.test(entry.name)) {
+          const match = content.match(forbiddenClassRegex);
+          if (match) {
+            violations.push(`${fullPath}: found forbidden blue/cool colour class "${match[0]}"`);
+          }
+          const darkMatch = content.match(forbiddenDarkHexRegex);
+          if (darkMatch) {
+            violations.push(`${fullPath}: found forbidden dark hex "${darkMatch[0]}"`);
+          }
         }
         if (content.includes('GEMINI_API_KEY')) {
           violations.push(`${fullPath}: must not reference GEMINI_API_KEY in frontend code`);
+        }
+        if (googleApiKeyRegex.test(content)) {
+          violations.push(`${fullPath}: must not contain hardcoded Google API key (AIza...)`);
         }
       }
     }
     return violations;
   }
 
-  const violations = scanDir(path.join(rootDir, 'src'));
+  const violations = [
+    ...scanDir(path.join(rootDir, 'src')),
+    ...scanDir(path.join(rootDir, 'public')),
+  ];
   assert.deepEqual(violations, []);
 });
